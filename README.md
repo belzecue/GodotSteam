@@ -1,7 +1,7 @@
 # GodotSteam for Godot Engine
-Steam API for the Godot game engine (version 3.0 - 3.2.2). For the Windows, Linux, and Mac platforms. 
+Steam API for the Godot game engine (version 3.0 - 3.2.3). For the Windows, Linux, and Mac platforms. 
 
-Additional flavors include: [Godot 2.x](https://github.com/Gramps/GodotSteam/tree/godot2), [Godot 2.x Minimal](https://github.com/Gramps/GodotSteam/tree/godot2-min), [Godot 3.x Minimal](https://github.com/Gramps/GodotSteam/tree/godot3-min), [Server](https://github.com/Gramps/GodotSteam/tree/server), and [GDNative](https://github.com/Gramps/GodotSteam/tree/gdnative).
+Additional flavors include: [Godot 2.x](https://github.com/Gramps/GodotSteam/tree/godot2), [Server](https://github.com/Gramps/GodotSteam/tree/server), and [GDNative](https://github.com/Gramps/GodotSteam/tree/gdnative).
 
 Documentation
 ----------
@@ -11,17 +11,32 @@ You can also check out the Search Help section inside Godot Engine after compili
 
 Current Build
 ----------
-You can download pre-compiled versions _(currently v3.7)_ of this repo here: https://github.com/Gramps/GodotSteam/releases
+You can download pre-compiled versions _(currently v3.8.1)_ of this repo here: https://github.com/Gramps/GodotSteam/releases
 
-**Version 3.7 Changes**
-- Added: Networking Sockets class - all functions, enums, structs, and callbacks (still beta in Steamworks)
-- Added: Networking Utils class - all functions, enums, structs, and callbacks (still beta in Steamworks)
-- Added: Game Search callbacks, enums, and functions
-- Added: missing Steam Parties functions
-- Changed: bIOFailure argument naming in godotsteam.cpp to ioFailure
-- Fixed: issue where Cyrillic characters did not display correctly or at all
-- Fixed: call result for JoinParty, was previously callback
-- Removed: mingw_patch.py since it fixes one issue but creates additional issues
+**Version 3.8.2 Changes**
+- Added: different avatar constants
+- Changed: array deletions for Clang, _thanks to thisismike97_
+- Changed: initializing char text, _thanks to thisismike97_
+- Fixed: createQueryUserUGCRequest being commented out accidentally
+- Fixed: logic check for setOverlayNotificationPosition, _thanks to thisismike97_
+- Fixed: UTF8 not being handled correctly in some UGC functions, _thanks to EIREXE_
+
+**Version 3.8.1 Changes**
+- Added: extra newline beween each class section for readability
+- Added: new signal, _steamworks_error_, currently used for call results failures
+- Changed: cleared most items from to-do list
+- Changed: getSyncPlatforms now returns a dictionary with the bitwise and full name version of the platform
+- Changed: separated callbacks and call results in the godotsteam.cpp into two categories
+
+**Version 3.8 Changes**
+- Added: default argument to steamInit to pull all current stats or not, defaults to true so no one has to change anything
+- Added: new SteamNetworkingMessages class; with functions, callbacks, constants, and enums
+- Added: all missing functions due to 5 argument limit in Godot
+- Changed: filterText updated to match new SDK 1.50 function
+- Changed: HTTP class setCookie to setHTTPCookie to prevent confusion with HTML setCookie
+- Changed: moved fileLoadDialogReponse into html_file_open_dialog callback as it must follow the call anyway
+- Fixed: retrieveConnectionDetails and getAllLobbyData functions
+- Fixed: (probably) various NetworkingSockets and NetworkingUtils functions
 
 Known Issues
 ----------
@@ -31,7 +46,7 @@ Quick How-To
 ----------
 - Download this repository and unpack it.
 - Download and unpack the [Steamworks SDK](https://partner.steamgames.com); this requires a Steam developer account.
-- Download and unpack the [Godot source](https://github.com/godotengine/godot); preferably 3.2.2.
+- Download and unpack the [Godot source](https://github.com/godotengine/godot); preferably 3.2.3.
 - Move the following to godotsteam/sdk/:
 ````
     sdk/public/
