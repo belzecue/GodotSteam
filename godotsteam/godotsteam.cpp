@@ -1880,10 +1880,11 @@ void Steam::createCookieContainer(bool allowResponsesToModify){
 }
 
 // Initializes a new HTTP request.
-void Steam::createHTTPRequest(int requestMethod, const String& absoluteURL){
+uint32_t Steam::createHTTPRequest(int requestMethod, const String& absoluteURL){
 	if(SteamHTTP() != NULL){
-		SteamHTTP()->CreateHTTPRequest((EHTTPMethod)requestMethod, absoluteURL.utf8().get_data());
+		return SteamHTTP()->CreateHTTPRequest((EHTTPMethod)requestMethod, absoluteURL.utf8().get_data());
 	}
+	return HTTPREQUEST_INVALID_HANDLE;
 }
 
 // Defers a request which has already been sent by moving it at the back of the queue.
@@ -1913,10 +1914,11 @@ bool Steam::getHTTPRequestWasTimedOut(uint32 request){
 }
 
 // Gets the body data from an HTTP response.
-uint8 Steam::getHTTPResponseBodyData(uint32 request, uint32 bufferSize){
-	uint8 bodyData = 0; 
+PoolByteArray Steam::getHTTPResponseBodyData(uint32 request, uint32 bufferSize){
+	PoolByteArray bodyData;
+	bodyData.resize(bufferSize);
 	if(SteamHTTP() != NULL){
-		SteamHTTP()->GetHTTPResponseBodyData(request, &bodyData, bufferSize);
+		SteamHTTP()->GetHTTPResponseBodyData(request, bodyData.write().ptr(), bufferSize);
 	}
 	return bodyData;
 }
@@ -5798,8 +5800,8 @@ bool Steam::setItemDescription(uint64_t updateHandle, const String& description)
 	if(SteamUGC() == NULL){
 		return false;
 	}
-	if (description.length() > 255){
-		printf("Description cannot have more than %d ASCII characters. Description not set.", 255);
+	if (description.length() > k_cchPublishedDocumentDescriptionMax){
+		printf("Description cannot have more than %d ASCII characters. Description not set.", k_cchPublishedDocumentDescriptionMax);
 		return false;
 	}
 	UGCUpdateHandle_t handle = uint64(updateHandle);
@@ -6569,13 +6571,13 @@ Dictionary Steam::getAchievementProgressLimitsFloat(const String& name){
 }
 
 // Gets the lifetime totals for an aggregated stat; as an int
-int64 Steam::getGlobalStatInt(const String& name){
+uint64_t Steam::getGlobalStatInt(const String& name){
 	if(SteamUserStats() == NULL){
 		return 0;
 	}
 	int64 stat = 0;
 	SteamUserStats()->GetGlobalStat(name.utf8().get_data(), &stat);
-	return stat;
+	return (uint64_t)stat;
 }
 
 // Gets the lifetime totals for an aggregated stat; as an int
@@ -6589,13 +6591,13 @@ double Steam::getGlobalStatFloat(const String& name){
 }
 
 // Gets the daily history for an aggregated stat; int.
-int64 Steam::getGlobalStatIntHistory(const String& name){
+uint64_t Steam::getGlobalStatIntHistory(const String& name){
 	if(SteamUserStats() == NULL){
 		return 0;
 	}
 	int64 history = 0;
 	SteamUserStats()->GetGlobalStatHistory(name.utf8().get_data(), &history, 60);
-	return history;
+	return (uint64_t)history;
 }
 
 // Gets the daily history for an aggregated stat; float / double.
@@ -6692,27 +6694,43 @@ Dictionary Steam::getLeaderboardSortMethod(uint64_t thisLeaderboard){
 }
 
 // Gets the info on the most achieved achievement for the game.
-Array Steam::getMostAchievedAchievementInfo(){
+Dictionary Steam::getMostAchievedAchievementInfo(){
+	Dictionary entry;
 	if(SteamUserStats() == NULL){
-		return Array();
+		return entry;
 	}
-	Array achieve;
-	char name;
+	char *name = new char[64];
 	float percent = 0;
 	bool achieved = false;
 	// Get the data from Steam
-	int result = SteamUserStats()->GetMostAchievedAchievementInfo(&name, 64, &percent, &achieved);
-	while(result != -1){
-		Dictionary entry;
+	int result = SteamUserStats()->GetMostAchievedAchievementInfo(name, 64, &percent, &achieved);
+	if(result > -1){
 		entry["rank"] = result;
 		entry["name"] = name;
 		entry["percent"] = percent;
 		entry["achieved"] = achieved;
-		achieve.append(entry);
-		// Get the next most achieved achievement
-		result = SteamUserStats()->GetNextMostAchievedAchievementInfo(result, &name, 64, &percent, &achieved);
 	}
-	return achieve;
+	return entry;
+}
+
+// Gets the info on the next most achieved achievement for the game.
+Dictionary Steam::getNextMostAchievedAchievementInfo(int iterator){
+	Dictionary entry;
+	if(SteamUserStats() == NULL){
+		return entry;
+	}
+	char *name = new char[64];
+	float percent = 0;
+	bool achieved = false;
+	// Get the data from Steam
+	int result = SteamUserStats()->GetNextMostAchievedAchievementInfo(iterator, name, 64, &percent, &achieved);
+	if(result > -1){
+		entry["rank"] = result;
+		entry["name"] = name;
+		entry["percent"] = percent;
+		entry["achieved"] = achieved;
+	}
+	return entry;
 }
 
 // Get the number of achievements.
@@ -6860,8 +6878,7 @@ void Steam::requestUserStats(uint64_t steamID){
 
 // Reset all Steam statistics; optional to reset achievements.
 bool Steam::resetAllStats(bool achievementsToo){
-	SteamUserStats()->ResetAllStats(achievementsToo);
-	return SteamUserStats()->StoreStats();
+	return SteamUserStats()->ResetAllStats(achievementsToo);
 }
 
 // Set a given achievement.
@@ -6869,8 +6886,7 @@ bool Steam::setAchievement(const String& name){
 	if(SteamUserStats() == NULL){
 		return 0;
 	}
-	SteamUserStats()->SetAchievement(name.utf8().get_data());
-	return SteamUserStats()->StoreStats();
+	return SteamUserStats()->SetAchievement(name.utf8().get_data());
 }
 
 // Set a float statistic.
@@ -6888,8 +6904,7 @@ bool Steam::storeStats(){
 	if(SteamUserStats() == NULL){
 		return 0;
 	}
-	SteamUserStats()->StoreStats();
-	return SteamUserStats()->RequestCurrentStats();
+	return SteamUserStats()->StoreStats();
 }
 
 // Updates an AVGRATE stat with new values.
@@ -9298,7 +9313,7 @@ void Steam::_bind_methods(){
 	ClassDB::bind_method("checkResultSteamID", &Steam::checkResultSteamID);
 	ClassDB::bind_method("consumeItem", &Steam::consumeItem);
 	ClassDB::bind_method("deserializeResult", &Steam::deserializeResult);
-	ClassDB::bind_method("destroyResult", &Steam::exchangeItems);
+	ClassDB::bind_method("destroyResult", &Steam::destroyResult);
 	ClassDB::bind_method("exchangeItems", &Steam::exchangeItems);
 	ClassDB::bind_method("generateItems", &Steam::generateItems);
 	ClassDB::bind_method("getAllItems", &Steam::getAllItems);
@@ -9307,7 +9322,7 @@ void Steam::_bind_methods(){
 	ClassDB::bind_method("getItemPrice", &Steam::getItemPrice);
 	ClassDB::bind_method("getItemsWithPrices", &Steam::getItemsWithPrices);
 	ClassDB::bind_method("getNumItemsWithPrices", &Steam::getNumItemsWithPrices);
-	ClassDB::bind_method("getResultItemProperty", &Steam::getResultItems);
+	ClassDB::bind_method("getResultItemProperty", &Steam::getResultItemProperty);
 	ClassDB::bind_method("getResultItems", &Steam::getResultItems);
 	ClassDB::bind_method("getResultStatus", &Steam::getResultStatus);
 	ClassDB::bind_method("getResultTimestamp", &Steam::getResultTimestamp);
@@ -9426,15 +9441,16 @@ void Steam::_bind_methods(){
 	ClassDB::bind_method("updateVolume", &Steam::updateVolume);
 
 	// NETWORKING BIND METHODS //////////////////
-	ClassDB::bind_method("acceptP2PSessionWithUser", &Steam::acceptP2PSessionWithUser);
-	ClassDB::bind_method("allowP2PPacketRelay", &Steam::allowP2PPacketRelay);
-	ClassDB::bind_method("closeP2PChannelWithUser", &Steam::closeP2PChannelWithUser);
-	ClassDB::bind_method("closeP2PSessionWithUser", &Steam::closeP2PSessionWithUser);
-	ClassDB::bind_method("getP2PSessionState", &Steam::getP2PSessionState);
-	ClassDB::bind_method("getAvailableP2PPacketSize", &Steam::getAvailableP2PPacketSize);
-	ClassDB::bind_method("readP2PPacket", &Steam::readP2PPacket);
-	ClassDB::bind_method("sendP2PPacket", &Steam::sendP2PPacket);
-
+	ClassDB::bind_method(D_METHOD("acceptP2PSessionWithUser", "steamID"), &Steam::acceptP2PSessionWithUser);
+	ClassDB::bind_method(D_METHOD("allowP2PPacketRelay", "allow"), &Steam::allowP2PPacketRelay);
+	ClassDB::bind_method(D_METHOD("closeP2PChannelWithUser", "steamID", "channel"), &Steam::closeP2PChannelWithUser);
+	ClassDB::bind_method(D_METHOD("closeP2PSessionWithUser", "steamID"), &Steam::closeP2PSessionWithUser);
+	ClassDB::bind_method(D_METHOD("getP2PSessionState", "steamID"), &Steam::getP2PSessionState);
+	ClassDB::bind_method(D_METHOD("getAvailableP2PPacketSize", "channel"), &Steam::getAvailableP2PPacketSize);
+	ClassDB::bind_method(D_METHOD("readP2PPacket", "packetSize", "channel"), &Steam::readP2PPacket);
+	ClassDB::bind_method(D_METHOD("sendP2PPacket", "steamID", "data", "sendType", "channel"), &Steam::sendP2PPacket);
+	
+	
 	// NETWORKING MESSAGES BIND METHODS /////////
 	ClassDB::bind_method("sendMessageToUser", &Steam::sendMessageToUser);
 //	ClassDB::bind_method("receiveMessagesOnChannel", &Steam::receiveMessagesOnChannel);
@@ -9666,41 +9682,42 @@ void Steam::_bind_methods(){
 	
 	// User Stats Bind Methods //////////////////
 	ClassDB::bind_method(D_METHOD("attachLeaderboardUGC", "ugcHandle", "thisLeaderboard"), &Steam::attachLeaderboardUGC, DEFVAL(0));
-	ClassDB::bind_method("clearAchievement", &Steam::clearAchievement);
+	ClassDB::bind_method(D_METHOD("clearAchievement", "achievementName"), &Steam::clearAchievement);
 	ClassDB::bind_method(D_METHOD("downloadLeaderboardEntries", "start", "end", "type"), &Steam::downloadLeaderboardEntries, DEFVAL(0), DEFVAL(0));
 	ClassDB::bind_method(D_METHOD("downloadLeaderboardEntriesForUsers", "usersID", "thisLeaderboard"), &Steam::downloadLeaderboardEntriesForUsers, DEFVAL(0));
 	ClassDB::bind_method(D_METHOD("findLeaderboard", "name"), &Steam::findLeaderboard);
 	ClassDB::bind_method("findOrCreateLeaderboard", &Steam::findOrCreateLeaderboard);
-	ClassDB::bind_method("getAchievement", &Steam::getAchievement);
-	ClassDB::bind_method("getAchievementAchievedPercent", &Steam::getAchievementAchievedPercent);
-	ClassDB::bind_method("getAchievementAndUnlockTime", &Steam::getAchievementAndUnlockTime);
-	ClassDB::bind_method(D_METHOD("getAchievementDisplayAttribute", "name", "key"), &Steam::getAchievementDisplayAttribute);
-	ClassDB::bind_method(D_METHOD("getAchievementIcon", "name"), &Steam::getAchievementIcon);
-	ClassDB::bind_method(D_METHOD("getAchievementName", "achievement"), &Steam::getAchievementName);
-//	ClassDB::bind_method("getGlobalStatInt", &Steam::getGlobalStatInt);
+	ClassDB::bind_method(D_METHOD("getAchievement",                 "achievementName"),        &Steam::getAchievement);
+	ClassDB::bind_method(D_METHOD("getAchievementAchievedPercent",  "achievementName"),        &Steam::getAchievementAchievedPercent);
+	ClassDB::bind_method(D_METHOD("getAchievementAndUnlockTime",    "achievementName"),        &Steam::getAchievementAndUnlockTime);
+	ClassDB::bind_method(D_METHOD("getAchievementDisplayAttribute", "achievementName", "key"), &Steam::getAchievementDisplayAttribute);
+	ClassDB::bind_method(D_METHOD("getAchievementIcon",             "achievementName"),        &Steam::getAchievementIcon);
+	ClassDB::bind_method(D_METHOD("getAchievementName",             "achievementIndex"),       &Steam::getAchievementName);
+	ClassDB::bind_method("getGlobalStatInt", &Steam::getGlobalStatInt);
 	ClassDB::bind_method("getGlobalStatFloat", &Steam::getGlobalStatFloat);
-//	ClassDB::bind_method("getGlobalStatIntHistory", &Steam::getGlobalStatIntHistory);
+	ClassDB::bind_method("getGlobalStatIntHistory", &Steam::getGlobalStatIntHistory);
 	ClassDB::bind_method("getGlobalStatFloatHistory", &Steam::getGlobalStatFloatHistory);
 	ClassDB::bind_method(D_METHOD("getLeaderboardDisplayType", "thisLeaderboard"), &Steam::getLeaderboardDisplayType, DEFVAL(0));
 	ClassDB::bind_method(D_METHOD("getLeaderboardEntryCount", "thisLeaderboard"), &Steam::getLeaderboardEntryCount, DEFVAL(0));
 	ClassDB::bind_method(D_METHOD("getLeaderboardName", "thisLeaderboard"), &Steam::getLeaderboardName, DEFVAL(0));
 	ClassDB::bind_method(D_METHOD("getLeaderboardSortMethod", "thisLeaderboard"), &Steam::getLeaderboardSortMethod, DEFVAL(0));
 	ClassDB::bind_method("getMostAchievedAchievementInfo", &Steam::getMostAchievedAchievementInfo);
+	ClassDB::bind_method(D_METHOD("getNextMostAchievedAchievementInfo", "index"), &Steam::getNextMostAchievedAchievementInfo);
 	ClassDB::bind_method("getNumAchievements", &Steam::getNumAchievements);
 	ClassDB::bind_method("getNumberOfCurrentPlayers", &Steam::getNumberOfCurrentPlayers);
 	ClassDB::bind_method("getStatFloat", &Steam::getStatFloat);
 	ClassDB::bind_method("getStatInt", &Steam::getStatInt);
-	ClassDB::bind_method("getUserAchievement", &Steam::getUserAchievement);
-	ClassDB::bind_method("getUserAchievementAndUnlockTime", &Steam::getUserAchievementAndUnlockTime);
+	ClassDB::bind_method(D_METHOD("getUserAchievement",              "userID", "achievementName"), &Steam::getUserAchievement);
+	ClassDB::bind_method(D_METHOD("getUserAchievementAndUnlockTime", "userID", "achievementName"), &Steam::getUserAchievementAndUnlockTime);
 	ClassDB::bind_method("getUserStatFloat", &Steam::getUserStatFloat);
 	ClassDB::bind_method("getUserStatInt", &Steam::getUserStatInt);
-	ClassDB::bind_method("indicateAchievementProgress", &Steam::indicateAchievementProgress);
+	ClassDB::bind_method(D_METHOD("indicateAchievementProgress", "achievementName", "currentProgress", "targetProgress"), &Steam::indicateAchievementProgress);
 	ClassDB::bind_method("requestCurrentStats", &Steam::requestCurrentStats);
 	ClassDB::bind_method("requestGlobalAchievementPercentages", &Steam::requestGlobalAchievementPercentages);
 	ClassDB::bind_method("requestGlobalStats", &Steam::requestGlobalStats);
 	ClassDB::bind_method("requestUserStats", &Steam::requestUserStats);
 	ClassDB::bind_method("resetAllStats", &Steam::resetAllStats);
-	ClassDB::bind_method("setAchievement", &Steam::setAchievement);
+	ClassDB::bind_method(D_METHOD("setAchievement", "achievementName"), &Steam::setAchievement);
 	ClassDB::bind_method("setStatFloat", &Steam::setStatFloat);
 	ClassDB::bind_method("setStatInt", &Steam::setStatInt);
 	ClassDB::bind_method("storeStats", &Steam::storeStats);
@@ -9848,8 +9865,8 @@ void Steam::_bind_methods(){
 	ADD_SIGNAL(MethodInfo("music_player_will_quit"));
 
 	// NETWORKING SIGNALS ///////////////////////
-	ADD_SIGNAL(MethodInfo("p2p_session_request"));
-	ADD_SIGNAL(MethodInfo("p2p_session_connect_fail"));
+	ADD_SIGNAL(MethodInfo("p2p_session_request", PropertyInfo(Variant::INT, "steamID")));
+	ADD_SIGNAL(MethodInfo("p2p_session_connect_fail", PropertyInfo(Variant::INT, "steamID"), PropertyInfo(Variant::INT, "sessionError")));
 
 	// NETWORKING MESSAGES //////////////////////
 	ADD_SIGNAL(MethodInfo("network_messages_session_request"));
@@ -9927,7 +9944,7 @@ void Steam::_bind_methods(){
 	ADD_SIGNAL(MethodInfo("leaderboard_score_uploaded", PropertyInfo(Variant::BOOL, "success"), PropertyInfo(Variant::INT, "score"), PropertyInfo(Variant::BOOL, "score_changed"), PropertyInfo(Variant::INT, "global_rank_new"), PropertyInfo(Variant::INT, "global_rank_previous")));
 	ADD_SIGNAL(MethodInfo("leaderboard_ugc_set"));
 	ADD_SIGNAL(MethodInfo("number_of_current_players", PropertyInfo(Variant::BOOL, "success"), PropertyInfo(Variant::INT, "players")));
-	ADD_SIGNAL(MethodInfo("user_achievement_stored"));
+	ADD_SIGNAL(MethodInfo("user_achievement_stored", PropertyInfo(Variant::INT, "gameID"), PropertyInfo(Variant::BOOL, "groupAchieve"), PropertyInfo(Variant::STRING, "achievementName"), PropertyInfo(Variant::INT, "currentProgress"), PropertyInfo(Variant::INT, "maxProgress")));
 	ADD_SIGNAL(MethodInfo("current_stats_received", PropertyInfo(Variant::INT, "gameID"), PropertyInfo(Variant::INT, "result"), PropertyInfo(Variant::INT, "userID")));
 	ADD_SIGNAL(MethodInfo("user_stats_received", PropertyInfo(Variant::INT, "gameID"), PropertyInfo(Variant::INT, "result"), PropertyInfo(Variant::INT, "userID")));
 	ADD_SIGNAL(MethodInfo("user_stats_stored"));

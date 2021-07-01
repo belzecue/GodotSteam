@@ -592,11 +592,11 @@ class Steam: public Object {
 
 		// HTTP /////////////////////////////////
 		void createCookieContainer( bool allowResponsesToModify);
-		void createHTTPRequest(int requestMethod, const String& absoluteURL);
+		uint32_t createHTTPRequest(int requestMethod, const String& absoluteURL);
 		bool deferHTTPRequest(uint32 request);
 		float getHTTPDownloadProgressPct(uint32 request);
 		bool getHTTPRequestWasTimedOut(uint32 request);
-		uint8 getHTTPResponseBodyData(uint32 request, uint32 bufferSize);
+		PoolByteArray getHTTPResponseBodyData(uint32 request, uint32 bufferSize);
 		uint32 getHTTPResponseBodySize(uint32 request);
 		uint32 getHTTPResponseHeaderSize(uint32 request, const String& headerName);
 		uint8 getHTTPResponseHeaderValue(uint32 request, const String& headerName, uint32 bufferSize);
@@ -1056,15 +1056,16 @@ class Steam: public Object {
 		String getAchievementName(uint32_t achievement);
 		Dictionary getAchievementProgressLimitsInt(const String& name);
 		Dictionary getAchievementProgressLimitsFloat(const String& name);
-		int64 getGlobalStatInt(const String& name);
+		uint64_t getGlobalStatInt(const String& name);
 		double getGlobalStatFloat(const String& name);
-		int64 getGlobalStatIntHistory(const String& name);
+		uint64_t getGlobalStatIntHistory(const String& name);
 		double getGlobalStatFloatHistory(const String& name);
 		Dictionary getLeaderboardDisplayType(uint64_t thisLeaderboard=0);
 		int getLeaderboardEntryCount(uint64_t thisLeaderboard=0);
 		String getLeaderboardName(uint64_t thisLeaderboard=0);
 		Dictionary getLeaderboardSortMethod(uint64_t thisLeaderboard=0);
-		Array getMostAchievedAchievementInfo();
+		Dictionary getMostAchievedAchievementInfo();
+		Dictionary getNextMostAchievedAchievementInfo(int iterator);
 		uint32_t getNumAchievements();
 		void getNumberOfCurrentPlayers();
 		float getStatFloat(const String& name);
